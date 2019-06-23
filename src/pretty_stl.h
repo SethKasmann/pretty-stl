@@ -1,116 +1,221 @@
 #pragma once
+#ifndef PRETTY_STL_H
+#define PRETTY_STL_H
 
-#ifndef pretty_stl
-#define pretty_stl
-
+#include <array>
+#include <deque>
+#include <forward_list>
 #include <iostream>
-#include <memory>
+#include <list>
+#include <map>
+#include <set>
 #include <string>
+#include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace pretty_stl {
 namespace detail {
-/*
- * Meta function to detect if any type is an iteratable stl container.
- * This is defined by any type where the following are well formed:
- *
- * 1. begin()  iterator
- * 2. end()    iterator
- * 3. cbegin() iterator
- * 4. cend()   iterator
- * 5. max_size
- * 6. empty
- *
- */
-template <class C, class = void>
-struct is_iteratable_stl_container : std::false_type {};
-template <class C>
-struct is_iteratable_stl_container<
-    C, std::void_t<typename C::value_type, decltype(std::declval<C>().begin()),
-                   decltype(std::declval<C>().end()),
-                   decltype(std::declval<C>().cbegin()),
-                   decltype(std::declval<C>().cend()),
-                   decltype(std::declval<C>().max_size()),
-                   decltype(std::declval<C>().empty())>> : std::true_type {};
 
-/*
- * Specilization is made for any container that already has an
- * ostream<< implementation.
- */
+struct sequence_container {};
+struct associative_container {};
+struct tuple_container {};
+
+// Contains 'type' to determine the container type for pretty print
+template <class> struct container_traits;
+
+template <class T, std::size_t N> struct container_traits<T[N]> {
+  using type = sequence_container;
+};
+
+template <class T, std::size_t N> struct container_traits<std::array<T, N>> {
+  using type = sequence_container;
+};
+
+template <class T, class A> struct container_traits<std::vector<T, A>> {
+  using type = sequence_container;
+};
+
+template <class T, class A> struct container_traits<std::deque<T, A>> {
+  using type = sequence_container;
+};
+
+template <class T, class A> struct container_traits<std::forward_list<T, A>> {
+  using type = sequence_container;
+};
+
+template <class T, class A> struct container_traits<std::list<T, A>> {
+  using type = sequence_container;
+};
+
+template <class K, class C, class A>
+struct container_traits<std::set<K, C, A>> {
+  using type = associative_container;
+};
+
+template <class K, class T, class C, class A>
+struct container_traits<std::map<K, T, C, A>> {
+  using type = associative_container;
+};
+
+template <class K, class C, class A>
+struct container_traits<std::multiset<K, C, A>> {
+  using type = associative_container;
+};
+
+template <class K, class T, class C, class A>
+struct container_traits<std::multimap<K, T, C, A>> {
+  using type = associative_container;
+};
+
+template <class K, class H, class KE, class A>
+struct container_traits<std::unordered_set<K, H, KE, A>> {
+  using type = associative_container;
+};
+
+template <class K, class T, class H, class KE, class A>
+struct container_traits<std::unordered_map<K, T, H, KE, A>> {
+  using type = associative_container;
+};
+
+template <class K, class H, class KE, class A>
+struct container_traits<std::unordered_multiset<K, H, KE, A>> {
+  using type = associative_container;
+};
+
+template <class K, class T, class H, class KE, class A>
+struct container_traits<std::unordered_multimap<K, T, H, KE, A>> {
+  using type = associative_container;
+};
+
+template <class T, class U> struct container_traits<std::pair<T, U>> {
+  using type = tuple_container;
+};
+
+template <class... Args> struct container_traits<std::tuple<Args...>> {
+  using type = tuple_container;
+};
+
+// Contains 'value' set to true if the container is defined as a pretty_stl
+// container
+template <class T, class = void>
+struct is_pretty_container : public std::false_type {};
+
+template <class T>
+struct is_pretty_container<T, std::void_t<typename container_traits<T>::type>>
+    : public std::true_type {};
+
 template <>
-struct is_iteratable_stl_container<std::string> : std::false_type {};
+struct is_pretty_container<std::string> : public std::false_type {
+}; // std::string is explicitly removed
 
-/*
- * Metafunction to determine if the stl container is a map
- * who's Value_type is a key value pair (std::pair)
- */
-template <class C, class = void> struct has_key_value_pair : std::false_type {};
-template <class C>
-struct has_key_value_pair<
-    C, std::void_t<decltype(std::declval<typename C::value_type>().first),
-                   decltype(std::declval<typename C::value_type>().second),
-                   typename C::key_type, typename C::mapped_type>>
-    : std::true_type {};
+template <>
+struct is_pretty_container<const char[]> : public std::false_type {
+}; // const char[] is explicitly removed
 
 } // namespace detail
 
-/*
- * Copy a basic element to the output stream (non key value pair)
- */
-template <class Ele>
-void element_to_ostream(std::ostream &os, const Ele &element) {
-  os << element;
+// open_container copies the opening character to a basic ostream based on the
+// container type
+template <class CharT, class Traits>
+void open_container(std::basic_ostream<CharT, Traits> &os,
+                    detail::sequence_container) {
+  os << '[';
 }
 
-/*
- * Specilization to copy a key value pair to the output stream.
- */
-template <class Key, class Value>
-void element_to_ostream(std::ostream &os, const std::pair<Key, Value> &kvp) {
-  os << kvp.first << ": " << kvp.second;
+template <class CharT, class Traits>
+void open_container(std::basic_ostream<CharT, Traits> &os,
+                    detail::associative_container) {
+  os << '{';
 }
 
-template <class C>
-void copy_elements_to_ostream(std::ostream &os, const C &container) {
-  auto it = container.cbegin();
-  if (it != container.cend()) {
-    element_to_ostream(os, *it);
-    for (++it; it != container.cend(); ++it) {
+template <class CharT, class Traits>
+void open_container(std::basic_ostream<CharT, Traits> &os,
+                    detail::tuple_container) {
+  os << '(';
+}
+
+// close_container copies the closing character to a basic ostream based on the
+// container type.
+template <class CharT, class Traits>
+void close_container(std::basic_ostream<CharT, Traits> &os,
+                     detail::sequence_container) {
+  os << ']';
+}
+
+template <class CharT, class Traits>
+void close_container(std::basic_ostream<CharT, Traits> &os,
+                     detail::associative_container) {
+  os << '}';
+}
+
+template <class CharT, class Traits>
+void close_container(std::basic_ostream<CharT, Traits> &os,
+                     detail::tuple_container) {
+  os << ')';
+}
+
+// Helper to call open_container using container traits
+template <class T> void open_container_helper(std::ostream &os, const T &) {
+  open_container(os, detail::container_traits<T>::type{});
+}
+
+// Helper to call close_container using container traits
+template <class T> void close_container_helper(std::ostream &os, const T &t) {
+  close_container(os, detail::container_traits<T>::type{});
+}
+
+// Copy std::tuple to a basic ostream using compile time recursion
+template <class T, std::size_t Idx>
+void pretty_tuple(std::ostream &os, const T &t,
+                  std::integral_constant<std::size_t, Idx> index) {
+  if constexpr (index.value < std::tuple_size<T>::value) {
+    if constexpr (index.value != 0) {
       os << ", ";
-      element_to_ostream(os, *it);
     }
+    os << std::get<index.value>(t);
+    pretty_tuple(os, t, std::integral_constant<std::size_t, index.value + 1>{});
   }
 }
 
-template <class C> void container_front(std::ostream &os, const C &container) {
-  char front = detail::has_key_value_pair<C>::value ? '{' : '[';
-  os << front;
+// Copy all sequence_containers and associative_containers containers to a
+// basic ostream.
+template <class T, class CharT, class Traits, class ContainerType>
+void pretty(std::basic_ostream<CharT, Traits> &os, const T &t, ContainerType) {
+  auto it = std::cbegin(t);
+  if (it != std::cend(t)) {
+    os << *it;
+  }
+  for (++it; it != std::cend(t); ++it) {
+    os << ", " << *it;
+  }
 }
 
-template <class C> void container_back(std::ostream &os, const C &container) {
-  char back = detail::has_key_value_pair<C>::value ? '}' : ']';
-  os << back;
-}
-
-template <class C>
-std::ostream &pretty_stl_container(std::ostream &os, const C &container) {
-  container_front(os, container);
-  copy_elements_to_ostream(os, container);
-  container_back(os, container);
-  return os;
-}
-
-/*
- * Overload the output stream operator<< to capture any containers that
- * meet the requirements of the is_iteratable_stl_container meta funciton.
- */
-template <class C,
-          std::enable_if_t<detail::is_iteratable_stl_container<C>::value, int> = 0>
-inline std::ostream &operator<<(std::ostream &os, const C &container) {
-  return pretty_stl_container(os, container);
+// Overload for tuple_container types is necessary since they are not
+// iteratable. Calls a helper method to print tuple_containers.
+template <class T, class CharT, class Traits>
+void pretty(std::basic_ostream<CharT, Traits> &os, const T &t,
+            detail::tuple_container) {
+  pretty_tuple(os, t, std::integral_constant<std::size_t, 0>{});
 }
 
 } // namespace pretty_stl
+
+// operator<< overload for basic_ostream. Will only be enabled for stl
+// containers handled by pretty_stl.
+template <class T, class CharT, class Traits,
+          std::enable_if_t<pretty_stl::detail::is_pretty_container<T>::value,
+                           int> = 0>
+std::basic_ostream<CharT, Traits> &
+operator<<(std::basic_ostream<CharT, Traits> &os, const T &t) {
+  using container_type = typename pretty_stl::detail::container_traits<T>::type;
+  pretty_stl::open_container_helper(os, t);
+  pretty_stl::pretty(os, t, container_type{});
+  pretty_stl::close_container_helper(os, t);
+  return os;
+}
 
 #endif

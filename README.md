@@ -2,7 +2,7 @@
 C++ header only library to print stl containers.
 
 ### Purpose
-The idea is to be able to copy all iteratable containers from the c++ standard template library to the output stream. This includes the following containers:
+The idea is to be able to copy the following containers from the c++ standard template library to the output stream.
 
 #### Sequence containers
 * std::array
@@ -20,6 +20,9 @@ The idea is to be able to copy all iteratable containers from the c++ standard t
 * std::unordered_map
 * std::unordered_multiset
 * std::unordered_multimap
+#### Tuple containers
+* std::pair
+* std::tuple
 
 ### Example
 ``` c++
@@ -46,5 +49,5 @@ int main() {
 ### Output
 ```
 my_vector [1, 2, 3, 4, 5]
-my_map {1: Hello, 2: world!}
+my_map {(1, Hello), (2, world!)}
 ```
